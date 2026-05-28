@@ -217,45 +217,5 @@ Tìm đoạn video nói về việc import dữ liệu vào Power BI.
 Video này phù hợp với người học kỹ năng nào?
 ```
 
-## Lưu ý khi push GitHub
 
-Nên thêm `.gitignore`:
-
-```gitignore
-.venv/
-__pycache__/
-*.pyc
-.env
-local/
-.sixth/
-web_app.out.log
-web_app.err.log
-```
-
-Không push:
-
-- API keys trong `.env`
-- dữ liệu crawl trong `local/`
-- virtual environment `.venv/`
-- file model/cache lớn
-
-## Hạn chế hiện tại
-
-- Tốc độ trả lời phụ thuộc vào Gemini API và độ dài context.
-- Video không có phụ đề cần transcribe audio, thời gian xử lý lâu hơn.
-- Chất lượng transcript phụ thuộc vào phụ đề YouTube hoặc mô hình Whisper.
-- Web app hiện phục vụ mục đích demo/local, chưa tối ưu cho production.
-
-## Hướng phát triển
-
-- Thêm database thay vì lưu local file.
-- Thêm queue/background worker cho job crawl dài.
-- Cache câu trả lời theo video và câu hỏi.
-- Hỗ trợ nhiều LLM provider như Gemini/OpenAI.
-- Tạo summary, key points và topic index sau khi build video.
-- Triển khai authentication và phân quyền người dùng.
-
-## Tác giả
-
-Đồ án cuối kỳ môn **Nền tảng dữ liệu**.
 
