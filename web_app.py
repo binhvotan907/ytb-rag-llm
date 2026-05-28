@@ -1459,6 +1459,7 @@ pre {
 APP_JS = r"""
 let selectedFile = "";
 let selectedVideo = null;
+let selectedChatKey = "";
 let currentJob = "";
 let pollTimer = null;
 let lastEvidenceQuestion = "";
@@ -1527,16 +1528,63 @@ function persistChatHistories() {
   }
 }
 
-function rememberMessage(role, content) {
-  rememberMessageFor(selectedFile, role, content);
+function chatKeys(file = selectedFile, video = selectedVideo) {
+  return [...new Set([
+    file,
+    video?.name,
+    video?.url,
+    video?.title
+  ].filter(Boolean))];
 }
 
-function rememberMessageFor(file, role, content) {
-  if (!file) return;
-  const history = chatHistories.get(file) || [];
-  history.push({ role, content });
-  chatHistories.set(file, history);
+function datasetChatKey(video) {
+  if (!video) return "";
+  return video.url || video.name || video.file || video.title || "";
+}
+
+function getChatHistory(file = selectedFile, video = selectedVideo) {
+  for (const key of chatKeys(file, video)) {
+    const history = chatHistories.get(key);
+    if (history && history.length) return history;
+  }
+  return [];
+}
+
+function setChatHistory(file, video, history) {
+  if (selectedChatKey) {
+    chatHistories.set(selectedChatKey, history);
+  }
+  for (const key of chatKeys(file, video)) {
+    chatHistories.set(key, history);
+  }
   persistChatHistories();
+}
+
+function rememberMessage(role, content) {
+  rememberMessageFor(selectedChatKey || selectedFile, selectedVideo, role, content);
+}
+
+function rememberMessageFor(file, video, role, content) {
+  if (!file) return;
+  const history = [...getChatHistory(file, video)];
+  history.push({ role, content });
+  setChatHistory(file, video, history);
+}
+
+function snapshotCurrentMessages() {
+  const key = selectedChatKey || selectedFile;
+  if (!key) return;
+  const nodes = [...document.querySelectorAll("#messages .message")];
+  const history = nodes.map(node => {
+    const role = node.classList.contains("user") ? "user" : "assistant";
+    const content = node.querySelector(".bubble")?.innerText?.trim() || "";
+    return { role, content };
+  }).filter(item => item.content);
+
+  const hasUserMessage = history.some(item => item.role === "user");
+  if (!hasUserMessage) return;
+
+  setChatHistory(key, selectedVideo, history);
 }
 
 async function api(path, options = {}) {
@@ -1560,7 +1608,8 @@ function addMessage(role, content, persist = true) {
 }
 
 function renderMessages() {
-  const history = selectedFile ? (chatHistories.get(selectedFile) || []) : [];
+  const key = selectedChatKey || selectedFile;
+  const history = key ? getChatHistory(key, selectedVideo) : [];
   if (history.length) {
     $("messages").innerHTML = "";
     history.forEach(item => addMessage(item.role, item.content, false));
@@ -1615,8 +1664,10 @@ function renderVideos(items) {
       <span class="ready-pill">${item.has_index ? "Sẵn sàng hỏi đáp" : "Đang thiếu index"}</span>
     `;
     div.onclick = () => {
+      snapshotCurrentMessages();
       selectedFile = item.file;
       selectedVideo = item;
+      selectedChatKey = datasetChatKey(item);
       lastEvidenceQuestion = "";
       lastEvidenceDataset = "";
       renderVideos(items);
@@ -1631,12 +1682,14 @@ function renderVideos(items) {
 }
 
 async function refreshVideos() {
+  snapshotCurrentMessages();
   const data = await api("/api/datasets");
   renderVideos(data.datasets);
   if (selectedFile) {
     const match = data.datasets.find(item => item.file === selectedFile);
     if (match) {
       selectedVideo = match;
+      selectedChatKey = datasetChatKey(match);
       renderHero(match);
       renderMessages();
       $("questionInput").disabled = !match.has_index;
@@ -1714,6 +1767,8 @@ $("askForm").onsubmit = async (event) => {
   const question = $("questionInput").value.trim();
   if (!question) return;
   const activeFile = selectedFile;
+  const activeVideo = selectedVideo;
+  const activeChatKey = selectedChatKey || selectedFile;
   addMessage("user", question);
   $("questionInput").value = "";
   const cacheKey = `${activeFile}::${question.toLowerCase()}`;
@@ -1730,11 +1785,11 @@ $("askForm").onsubmit = async (event) => {
     const answer = data.answer || "Không có kết quả.";
     answerCache.set(cacheKey, answer);
     bubble.innerHTML = formatAnswer(answer);
-    rememberMessageFor(activeFile, "assistant", answer);
+    rememberMessageFor(activeChatKey, activeVideo, "assistant", answer);
   } catch (err) {
     const message = err.message || "Không thể tạo câu trả lời.";
     bubble.innerHTML = formatAnswer(message);
-    rememberMessageFor(activeFile, "assistant", message);
+    rememberMessageFor(activeChatKey, activeVideo, "assistant", message);
   }
 };
 
@@ -1780,6 +1835,10 @@ $("evidencePanel").addEventListener("toggle", () => {
   if ($("evidencePanel").open) updateEvidence();
 });
 $("refreshVideos").onclick = refreshVideos;
+window.addEventListener("beforeunload", snapshotCurrentMessages);
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) snapshotCurrentMessages();
+});
 
 renderHero(null);
 refreshVideos();
@@ -1806,6 +1865,7 @@ class AppHandler(BaseHTTPRequestHandler):
             try:
                 self.send_response(200)
                 self.send_header("Content-Type", "text/css; charset=utf-8")
+                self.send_header("Cache-Control", "no-store")
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
                 self.wfile.write(body)
@@ -1818,6 +1878,7 @@ class AppHandler(BaseHTTPRequestHandler):
             try:
                 self.send_response(200)
                 self.send_header("Content-Type", "application/javascript; charset=utf-8")
+                self.send_header("Cache-Control", "no-store")
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
                 self.wfile.write(body)
