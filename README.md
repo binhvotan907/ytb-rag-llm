@@ -76,8 +76,6 @@ ytb-rag-llm/
 └── .env
 ```
 
-Ghi chú: thư mục `local/` chứa dữ liệu đã crawl và vector index, không nên push lên GitHub.
-
 ## Cài đặt
 
 ### 1. Clone project
@@ -121,8 +119,6 @@ WHISPER_MODEL=small
 WHISPER_DEVICE=cpu
 WHISPER_COMPUTE_TYPE=int8
 ```
-
-Không commit file `.env` lên GitHub.
 
 ## Chạy web app
 
