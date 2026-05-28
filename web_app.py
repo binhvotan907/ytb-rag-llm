@@ -1551,9 +1551,6 @@ function getChatHistory(file = selectedFile, video = selectedVideo) {
 }
 
 function setChatHistory(file, video, history) {
-  if (selectedChatKey) {
-    chatHistories.set(selectedChatKey, history);
-  }
   for (const key of chatKeys(file, video)) {
     chatHistories.set(key, history);
   }
