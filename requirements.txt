@@ -1,0 +1,20 @@
+# Core dependencies (required)
+google-api-python-client>=2.0.0
+yt-dlp>=2024.0.0
+
+# AI / Knowledge Base (optional - RAG)
+sentence-transformers>=2.2.0
+faiss-cpu>=1.7.0
+numpy>=1.24.0
+
+# Dataset export
+pandas>=2.0.0
+pyarrow>=12.0.0
+
+# Env variables
+python-dotenv>=1.0.0
+
+google-genai
+
+# Optional: audio transcription fallback when YouTube has no subtitles
+faster-whisper>=1.0.0
