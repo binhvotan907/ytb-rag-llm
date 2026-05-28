@@ -2,8 +2,6 @@
 
 **YouTube RAG Studio** là hệ thống hỏi đáp thông minh trên nội dung video YouTube, ứng dụng quy trình **Retrieval-Augmented Generation (RAG)** để crawl transcript, chia nhỏ nội dung, tạo vector index và trả lời câu hỏi dựa trên ngữ cảnh video.
 
-Đồ án được xây dựng cho môn **Nền tảng dữ liệu**, tập trung vào pipeline xử lý dữ liệu từ video YouTube đến hệ thống truy xuất ngữ nghĩa và hỏi đáp bằng LLM.
-
 ## Tính năng chính
 
 - Crawl metadata video YouTube bằng YouTube Data API.
