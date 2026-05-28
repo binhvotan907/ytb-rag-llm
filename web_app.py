@@ -1463,7 +1463,9 @@ let currentJob = "";
 let pollTimer = null;
 let lastEvidenceQuestion = "";
 let lastEvidenceDataset = "";
+const CHAT_STORAGE_KEY = "youtube-rag-chat-histories-v1";
 const answerCache = new Map();
+const chatHistories = loadChatHistories();
 
 const $ = (id) => document.getElementById(id);
 
@@ -1507,6 +1509,36 @@ function formatAnswer(value) {
   return parts.join("");
 }
 
+function loadChatHistories() {
+  try {
+    const raw = localStorage.getItem(CHAT_STORAGE_KEY);
+    const data = raw ? JSON.parse(raw) : {};
+    return new Map(Object.entries(data));
+  } catch {
+    return new Map();
+  }
+}
+
+function persistChatHistories() {
+  try {
+    localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(Object.fromEntries(chatHistories)));
+  } catch {
+    // Chat remains available in memory if browser storage is blocked.
+  }
+}
+
+function rememberMessage(role, content) {
+  rememberMessageFor(selectedFile, role, content);
+}
+
+function rememberMessageFor(file, role, content) {
+  if (!file) return;
+  const history = chatHistories.get(file) || [];
+  history.push({ role, content });
+  chatHistories.set(file, history);
+  persistChatHistories();
+}
+
 async function api(path, options = {}) {
   const res = await fetch(path, {
     headers: { "Content-Type": "application/json" },
@@ -1517,16 +1549,24 @@ async function api(path, options = {}) {
   return data;
 }
 
-function addMessage(role, content) {
+function addMessage(role, content, persist = true) {
   const div = document.createElement("div");
   div.className = `message ${role}`;
   div.innerHTML = `<div class="bubble">${role === "assistant" ? formatAnswer(content) : escapeHtml(content)}</div>`;
   $("messages").appendChild(div);
   $("messages").scrollTop = $("messages").scrollHeight;
+  if (persist) rememberMessage(role, content);
   return div.querySelector(".bubble");
 }
 
-function resetMessages() {
+function renderMessages() {
+  const history = selectedFile ? (chatHistories.get(selectedFile) || []) : [];
+  if (history.length) {
+    $("messages").innerHTML = "";
+    history.forEach(item => addMessage(item.role, item.content, false));
+    return;
+  }
+
   $("messages").innerHTML = `
     <div class="message assistant">
       <div class="bubble">Video đã sẵn sàng. Bạn có thể hỏi về nội dung, các bước thực hành, hoặc mở phần kiểm chứng để xem timestamp.</div>
@@ -1581,7 +1621,7 @@ function renderVideos(items) {
       lastEvidenceDataset = "";
       renderVideos(items);
       renderHero(item);
-      resetMessages();
+      renderMessages();
       $("questionInput").disabled = !item.has_index;
       $("askButton").disabled = !item.has_index;
       $("evidenceList").textContent = "Chưa có kết quả truy xuất.";
@@ -1598,6 +1638,9 @@ async function refreshVideos() {
     if (match) {
       selectedVideo = match;
       renderHero(match);
+      renderMessages();
+      $("questionInput").disabled = !match.has_index;
+      $("askButton").disabled = !match.has_index;
     }
   }
 }
@@ -1670,21 +1713,29 @@ $("askForm").onsubmit = async (event) => {
   if (!selectedFile) return;
   const question = $("questionInput").value.trim();
   if (!question) return;
+  const activeFile = selectedFile;
   addMessage("user", question);
   $("questionInput").value = "";
-  const cacheKey = `${selectedFile}::${question.toLowerCase()}`;
+  const cacheKey = `${activeFile}::${question.toLowerCase()}`;
   if (answerCache.has(cacheKey)) {
     addMessage("assistant", answerCache.get(cacheKey));
     return;
   }
-  const bubble = addMessage("assistant", "Đang trả lời...");
-  const data = await api("/api/ask", {
-    method: "POST",
-    body: JSON.stringify({ output_file: selectedFile, question, use_llm: true })
-  });
-  const answer = data.answer || "Không có kết quả.";
-  answerCache.set(cacheKey, answer);
-  bubble.innerHTML = formatAnswer(answer);
+  const bubble = addMessage("assistant", "Đang trả lời...", false);
+  try {
+    const data = await api("/api/ask", {
+      method: "POST",
+      body: JSON.stringify({ output_file: activeFile, question, use_llm: true })
+    });
+    const answer = data.answer || "Không có kết quả.";
+    answerCache.set(cacheKey, answer);
+    bubble.innerHTML = formatAnswer(answer);
+    rememberMessageFor(activeFile, "assistant", answer);
+  } catch (err) {
+    const message = err.message || "Không thể tạo câu trả lời.";
+    bubble.innerHTML = formatAnswer(message);
+    rememberMessageFor(activeFile, "assistant", message);
+  }
 };
 
 async function updateEvidence() {
