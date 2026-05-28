@@ -7,7 +7,7 @@ def clean_youtube_input(url):
     url = url.strip()
 
     if "youtu.be/" in url:
-        return "video", url.split("youtu.be/")[1].split("?")[0]
+        return "video", url.split("youtu.be/")[1].split("?")[0].split("&")[0].split("/")[0]
 
     if "watch?v=" in url:
         match = re.search(r"v=([a-zA-Z0-9_-]+)", url)
@@ -15,26 +15,20 @@ def clean_youtube_input(url):
             return "video", match.group(1)
 
     if "/shorts/" in url:
-        return "video", url.split("/shorts/")[1].split("?")[0]
+        return "video", url.split("/shorts/")[1].split("?")[0].split("&")[0].split("/")[0]
 
-    if "list=" in url:
-        match = re.search(r"list=([a-zA-Z0-9_-]+)", url)
-        if match:
-            return "playlist", match.group(1)
+    unsupported_patterns = (
+        "list=",
+        "/playlist",
+        "/channel/",
+        "/c/",
+        "/user/",
+        "/@",
+    )
+    if any(pattern in url for pattern in unsupported_patterns):
+        return "unsupported", url
 
-    if "/channel/" in url:
-        return "channel", url.split("/channel/")[1].split("?")[0].split("/")[0]
-
-    if "/c/" in url:
-        return "channel", url.split("/c/")[1].split("?")[0].split("/")[0]
-
-    if "/user/" in url:
-        return "channel", url.split("/user/")[1].split("?")[0].split("/")[0]
-
-    if "/@" in url:
-        return "channel", "@" + url.split("/@")[1].split("?")[0].split("/")[0]
-
-    clean_id = url.split("?")[0].split("&")[0]
+    clean_id = url.split("?")[0].split("&")[0].strip()
     return None, clean_id
 
 

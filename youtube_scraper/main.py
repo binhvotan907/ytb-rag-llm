@@ -6,7 +6,7 @@ from googleapiclient.discovery import build
 import googleapiclient.errors
 
 from youtube_scraper.utils import load_existing_progress, save_progress, clean_youtube_input, export_rag_jsonl
-from youtube_scraper.metadata import get_all_video_ids, get_all_playlist_video_ids, get_video_details, resolve_channel_handle
+from youtube_scraper.metadata import get_video_details
 from youtube_scraper.transcripts import add_transcripts
 from youtube_scraper.knowledge_base import build_knowledge_base
 from youtube_scraper.search import (
@@ -23,11 +23,7 @@ from youtube_scraper.chatbot import answer_with_llm
 def main():
     parser = argparse.ArgumentParser(description="YouTube Scraper: Downloader for Video Metadata & Transcripts.")
     
-    # Scraping targets (mutually exclusive)
-    group = parser.add_mutually_exclusive_group(required=False)
-    group.add_argument("--video", type=str, help="Scrape a single YouTube video ID or URL")
-    group.add_argument("--playlist", type=str, help="Scrape all videos in a YouTube Playlist ID or URL")
-    group.add_argument("--channel", type=str, help="Scrape all videos in a YouTube Channel ID, URL, or @handle")
+    parser.add_argument("--video", type=str, help="Scrape a single YouTube video ID or URL")
     
     # Query mode (independent of scraping)
     parser.add_argument("--ask", type=str, help="Ask a question against an existing knowledge base (skips scraping)")
@@ -113,8 +109,8 @@ def main():
         return
     
     # ─── SCRAPING MODE ────────────────────────────────────────
-    if not (args.video or args.playlist or args.channel):
-        parser.error("one of --video, --playlist, --channel, --ask, or --chat is required")
+    if not args.video:
+        parser.error("one of --video, --ask, or --chat is required")
 
     print("=" * 60)
     print("CHƯƠNG TRÌNH CRAWL YOUTUBE")
@@ -142,13 +138,11 @@ def main():
 
     # Clean the input target safely
     if args.video:
-        _, args.video = clean_youtube_input(args.video)
-    if args.playlist:
-        _, args.playlist = clean_youtube_input(args.playlist)
-    if args.channel:
-        _, args.channel = clean_youtube_input(args.channel)
+        input_type, args.video = clean_youtube_input(args.video)
+        if input_type not in (None, "video"):
+            parser.error("Only single YouTube videos are supported.")
         
-    source_target = args.video or args.playlist or args.channel
+    source_target = args.video
 
     try:
         subprocess.run(["yt-dlp", "--version"], capture_output=True, check=True)
@@ -168,17 +162,6 @@ def main():
         if args.video:
             print(f"Đang lấy thông tin video: {args.video}")
             new_video_ids = [args.video]
-        elif args.playlist:
-            new_video_ids = get_all_playlist_video_ids(youtube, args.playlist)
-        elif args.channel:
-            # Check if it needs handle resolution first
-            if args.channel.startswith("@"):
-                resolved_id = resolve_channel_handle(youtube, args.channel)
-                if not resolved_id:
-                    sys.exit(1)
-                args.channel = resolved_id
-                
-            new_video_ids = get_all_video_ids(youtube, args.channel)
 
         # Identify videos we do not quickly have metadata for yet
         ids_to_fetch = [vid for vid in new_video_ids if vid not in existing_video_ids]
